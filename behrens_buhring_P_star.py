@@ -306,7 +306,7 @@ if __name__ == '__main__':
     rhos = [-2.21086, -2.1053, 0.75442, 0.5596, -0.6302, -1.2955, 1.60203]
     abvs = [(1 - 1 / 3 * r ** 2) / (1 + r ** 2) for r in rhos]
     masses = [1, 3, 11, 13, 15, 17, 19]
-    charges = [0, 1, 6, 7, 8, 8, 10]  # TODO: implement Z corrections
+    charges = [0, 1, 6, 7, 8, 8, 10]
     sensitivityRatios = [3.6, 4.6, -1.2, -0.7, -0.9, -3.6, -13.1]
     m_fs = [mass * 1822.89 for mass in masses]
     deltas = np.asarray(
