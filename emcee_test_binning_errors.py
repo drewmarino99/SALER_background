@@ -55,18 +55,19 @@ def monte_carlo(points, bincount):
 
 
 numtrials = 100
+
 labels = ["a", "b", "c"]
 
 errors = np.zeros((numtrials, 3))
 for i in range(numtrials):
     print(i)
-    b = 4 * np.random.uniform()
-    a = -np.random.uniform()
+    b = np.random.uniform()
+    a = np.random.uniform(4,10)
     truth = np.poly1d([a, b, 0])
     c = -np.min(truth(np.linspace(0, 100, 100)))
 
     integral_fn = np.poly1d([a / 3, b / 2, c, 0])
-    endpoint = 10
+    endpoint = 1
     integral = integral_fn(endpoint) - integral_fn(0)
     a /= integral
     b /= integral
@@ -89,7 +90,7 @@ for i in range(numtrials):
     nll = lambda *args: -log_likelihood(*args)
     soln = minimize(nll, initial, args=(x, y, yerr))
     a_ml, b_ml, c_ml = soln.x
-    # print(soln.x)
+    print(soln.x, [a, b, c])
 
     pos = (soln.x) + (1e-2 * np.random.randn(32, 3))
     # print(pos.shape)
@@ -116,12 +117,21 @@ for i in range(numtrials):
     #     flat_samples, labels=labels, truth=[a, b, c], show_titles=True
     # )
     a_mc, b_mc, c_mc = np.mean(flat_samples, axis=0)
-    errors[i] = [a - a_mc, b - b_mc, c - c_mc]
+    # plt.plot(x, y)
+    # plt.plot(np.linspace(0, endpoint, 100), np.poly1d([a_mc, b_mc, c_mc])(np.linspace(0,endpoint,100)))
+    # plt.plot(np.linspace(0, endpoint, 100), truth(np.linspace(0, endpoint, 100)))
+    errors[i] = [100*(a - a_mc)/a_mc, 100*(b - b_mc)/b_mc, 100*(c - c_mc)/c_mc]
     # plt.show()
 for i in range(3):
     plt.figure()
     plt.hist(errors[:, i], label=labels[i])
-    plt.xlabel('Truth-measured')
+    plt.xlabel('Truth-measured (%)')
     plt.ylabel('Counts')
     plt.legend()
 plt.show()
+
+# Go back to where I left off, however:
+# * Fitting procedure has a bias even without introducing one
+# * Look at relative difference.  Set initial offset to zero then introduce new offset and see what the change in the fit is
+# * In parallel Leendert will look at it and try to help
+# * First steps: offset, linearity, quadricity, resolution, etc.

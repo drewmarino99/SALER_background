@@ -161,10 +161,6 @@ def monte_carlo(Delta, Z_daught, m_f, qs, lil_a, lil_b, points):
     # NEW METHOD FROM POLYNOMIAL TEST
     for ix in range(len(pdf) - 1):
         cdf[ix + 1] = cdf[ix] + (pdf_x[ix + 1] - pdf_x[ix]) * 0.5 * (pdf[ix] + pdf[ix + 1])
-        # take ratio with analytical via integration
-        # possibly need cdf one longer
-        # Trapezoid or simpson integration?
-        # Check what CDF is before doing next line: should be one
     cdf = cdf / cdf[-1]
     # print(cdf)
     # plt.plot(pdf_x, (integral_fn(pdf_x) - cdf))

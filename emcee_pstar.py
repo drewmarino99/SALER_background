@@ -88,7 +88,7 @@ nwalkers, ndim = pos.shape
 sampler = emcee.EnsembleSampler(
     nwalkers, ndim, log_probability, args=(x, y, yerr)
 )
-sampler.run_mcmc(pos, 10000, progress=True)
+sampler.run_mcmc(pos, 1000, progress=True)
 fig, axes = plt.subplots(3, figsize=(10, 7), sharex=True)
 samples = sampler.get_chain()
 labels = ["a", "b", "scale"]
@@ -103,7 +103,7 @@ axes[-1].set_xlabel("step number")
 plt.show()
 
 
-flat_samples = sampler.get_chain(discard=1000, thin=15, flat=True)
+flat_samples = sampler.get_chain(discard=100, thin=15, flat=True)
 print(flat_samples.shape)
 fig = corner.corner(
     flat_samples, labels=labels, truths=[abv, lil_b, 1/scale_guess]
