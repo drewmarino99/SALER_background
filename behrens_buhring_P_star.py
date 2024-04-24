@@ -145,7 +145,7 @@ def dGamma_dEf(delta, Z, mf, pf, a, b):
             pf ** 2 * i_mnl(E_0, 1, 0, -1, e_bounds) - i_mnl(E_0, 1, 0, 1, e_bounds) - i_mnl(E_0, 1, 2, -1,
                                                                                              e_bounds)))
     )
-    return res/np.sum(res)  # normalize
+    return res/(np.sum(res) * (pf[1]-pf[0]))  # normalize
 
 
 def moving_average(x, w):

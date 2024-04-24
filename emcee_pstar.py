@@ -60,15 +60,16 @@ monte_carlo_error[monte_carlo_error == 0] += 1
 nll = lambda *args: -log_likelihood(*args)
 
 # Initial guesses at parameters (using the real values for now)
-scale_guess = np.amax(monte_carlo_data) / real_max
+# scale_guess = np.amax(monte_carlo_data) / real_max
+scale_guess = 1
 initial = np.array([abv, lil_b, scale_guess])
 
 x = qs
 y = monte_carlo_data
 yerr = monte_carlo_error
 
-plt.plot(qs, real_ys)
 plt.plot(qs, np.divide(monte_carlo_data, scale_guess))
+plt.plot(qs, real_ys)
 plt.show()
 
 # max log likelihood to get initial guesses for MCMC
@@ -77,9 +78,11 @@ a_ml, b_ml, scale_ml = soln.x
 
 print(abv, lil_b, scale_guess)
 print(a_ml, b_ml, scale_ml)
+# Note scale should be ~1: everything is normalized!
 
-plt.plot(qs, dGamma_dEf(delta, charge, m_f, qs, a_ml, b_ml))
-plt.plot(qs, np.divide(monte_carlo_data, scale_guess))
+plt.plot(qs, np.divide(monte_carlo_data, scale_guess), label='MC Data')
+plt.plot(qs, dGamma_dEf(delta, charge, m_f, qs, a_ml, b_ml), label='dGamma/dEf')
+plt.legend()
 plt.show()
 
 pos = np.array([abv, lil_b, scale_guess]) + 1e-2 * soln.x * np.random.randn(32, 3)
@@ -88,7 +91,7 @@ nwalkers, ndim = pos.shape
 sampler = emcee.EnsembleSampler(
     nwalkers, ndim, log_probability, args=(x, y, yerr)
 )
-sampler.run_mcmc(pos, 1000, progress=True)
+sampler.run_mcmc(pos, 5000, progress=True)
 fig, axes = plt.subplots(3, figsize=(10, 7), sharex=True)
 samples = sampler.get_chain()
 labels = ["a", "b", "scale"]

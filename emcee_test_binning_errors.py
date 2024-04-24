@@ -62,7 +62,7 @@ errors = np.zeros((numtrials, 3))
 for i in range(numtrials):
     print(i)
     b = np.random.uniform()
-    a = np.random.uniform(4,10)
+    a = np.random.uniform(4, 10)
     truth = np.poly1d([a, b, 0])
     c = -np.min(truth(np.linspace(0, 100, 100)))
 
@@ -86,11 +86,10 @@ for i in range(numtrials):
     # Probably don't need to do emcee here yet either:
     # the difference of PDF vs analytical should be sqrt(N) independent of bin size
 
-    initial = np.array([0, 0.5, 5])  # initial guess in middle of range
+    initial = np.array([0.5, 0.5, 5])  # initial guess in middle of range
     nll = lambda *args: -log_likelihood(*args)
     soln = minimize(nll, initial, args=(x, y, yerr))
     a_ml, b_ml, c_ml = soln.x
-    print(soln.x, [a, b, c])
 
     pos = (soln.x) + (1e-2 * np.random.randn(32, 3))
     # print(pos.shape)
@@ -117,6 +116,7 @@ for i in range(numtrials):
     #     flat_samples, labels=labels, truth=[a, b, c], show_titles=True
     # )
     a_mc, b_mc, c_mc = np.mean(flat_samples, axis=0)
+    print(soln.x, [a, b, c], [a_mc, b_mc, c_mc])
     # plt.plot(x, y)
     # plt.plot(np.linspace(0, endpoint, 100), np.poly1d([a_mc, b_mc, c_mc])(np.linspace(0,endpoint,100)))
     # plt.plot(np.linspace(0, endpoint, 100), truth(np.linspace(0, endpoint, 100)))
