@@ -51,7 +51,7 @@ def log_probability(theta, x, y, yerr):
 
 
 # Sample from CDF to generate data to fit to
-qs, monte_carlo_data = monte_carlo(delta, charge, m_f, qs, abv, lil_b, int(1e8))
+qs, monte_carlo_data = monte_carlo(delta, charge, m_f, qs, abv, lil_b, int(1e7))
 monte_carlo_error = np.sqrt(monte_carlo_data)
 monte_carlo_error[monte_carlo_error == 0] += 1
 
@@ -85,13 +85,13 @@ plt.plot(qs, dGamma_dEf(delta, charge, m_f, qs, a_ml, b_ml), label='dGamma/dEf')
 plt.legend()
 plt.show()
 
-pos = np.array([abv, lil_b, scale_guess]) + 1e-2 * soln.x * np.random.randn(32, 3)
+pos = soln.x + 1e-4 * np.random.randn(32, 3)
 nwalkers, ndim = pos.shape
 
 sampler = emcee.EnsembleSampler(
     nwalkers, ndim, log_probability, args=(x, y, yerr)
 )
-sampler.run_mcmc(pos, 5000, progress=True)
+sampler.run_mcmc(pos, 50000, progress=True)
 fig, axes = plt.subplots(3, figsize=(10, 7), sharex=True)
 samples = sampler.get_chain()
 labels = ["a", "b", "scale"]
@@ -114,3 +114,7 @@ fig = corner.corner(
 print(np.mean(flat_samples, axis=0))
 plt.show()
 
+# Go back to minuit/curve_fit/whatever for now and try nonlinearity, resolution, etc.
+# Take BeEST laser centroids and scatter each in a gaussian centered at measured value with width uncertainty on centroid
+# Use this to apply to recoil data and fit to little a, this will give you the remaining uncertainty on the calibration applied to little a
+# constant noise, fano noise, inhomogeneity noise

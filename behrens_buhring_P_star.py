@@ -312,15 +312,15 @@ if __name__ == '__main__':
     m_is = [m_fs[i] + deltas[i] for i in range(len(m_fs))]
     lil_b = 0
     q_maxes = [np.sqrt(delta ** 2 - 1) for delta in deltas]
-    qs = np.asarray([np.linspace(0, qmax, 1000000) for qmax in q_maxes])
+    qs = np.asarray([np.linspace(0, qmax, 100000) for qmax in q_maxes])
 
     # Run each one until sensitivity to dr/r better than 0.1%
     for i in range(len(rhos)):
         sensitivity = 1000
-        num_points = int(1e8)
+        num_points = int(1e9)
         # Still no Z correction: note * 0
         real_max = np.amax(dGamma_dEf(deltas[i], charges[i], m_fs[i], qs[i], abvs[i], lil_b))
-        while sensitivity > 0.1 / 100 and num_points < 1e9:
+        while sensitivity > 0.1 / 100 and num_points < 1e11:
             xs, ys = monte_carlo(deltas[i], charges[i] * 0, m_fs[i], qs[i], abvs[i], lil_b, num_points)
             ys_err = np.sqrt(ys)
             ys_err[ys_err == 0] = 1
@@ -348,24 +348,28 @@ if __name__ == '__main__':
 
             # Output results
             print(list(['n', '3H', '11C', '13N', '15O', '17F', '19Ne'])[i])
+
             # Without b
+            error = m.errors['a']
+            sensitivity = np.abs((error / abvs[i]) / sensitivityRatios[i])
             print(f'Points: {num_points:,},', f'Delta rho / rho: {sensitivity:.5f},', f'Real a: {abvs[i]:.5f},',
-                  f"Fit a:{m.values['a']:.5f} +/- {m.errors['a']:0.1e}")
+                  f"Fit a:{m.values['a']:.5f} +/- {m.errors['a']:0.1e}, scale: {m.values['scale']:.5f}")
 
             # # With b
-            # print(f'Points: {num_points:,},', f'Delta rho / rho: {sensitivity:.5f},', f'Real a: {abvs[i]:.5f},', f"Fit a:{m.values['a']:.5f} +/- {m.errors['a']:0.1e}, Fit b:{m.values['b']:.5f} +/- {m.errors['b']:0.1e}")
+            # error = m.errors['a']
+            # sensitivity = np.abs((error / abvs[i]) / sensitivityRatios[i])
+            # print(f'Points: {num_points:,},', f'Delta rho / rho: {sensitivity:.5f},', f'Real a: {abvs[i]:.5f},',
+            # f"Fit a:{m.values['a']:.5f} +/- {m.errors['a']:0.1e}, Fit b:{m.values['b']:.5f} +/- {m.errors['b']:0.1e},
+            # scale: {m.values['scale']:.3f}")
 
             # # Only b
             # print(f"Points: {num_points:,}, Fit b:{m.values['b']:.5f} +/- {m.errors['b']:0.1e}")
 
             # print(m.covariance)
 
-            error = m.errors['a']
-            sensitivity = np.abs((error / abvs[i]) / sensitivityRatios[i])
-
             fit = m.values['scale'] * dGamma_dEf(deltas[i], charges[i] * 0,
                                                  m_fs[i], xs, m.values['a'], 0)
-            num_points *= 10
+
             fig, axs = plt.subplots(2, sharex=True, gridspec_kw={'height_ratios': [4, 1]})
             axs[0].plot(xs ** 2 / (2 * m_fs[i]) * 511000, ys, linewidth=1.1, drawstyle='steps-mid')
             axs[0].plot(xs ** 2 / (2 * m_fs[i]) * 511000, fit, linewidth=0.9, color='r')
@@ -373,17 +377,17 @@ if __name__ == '__main__':
             # # Inset zoom for high-statistics plot readability
             # x1, x2 = (xs[np.argmax(fit)] * 0.97, xs[np.argmax(fit)] * 1.03)
             # y1, y2 = fit.max() * 0.97, fit.max() * 1.03
-            # inset = axs[0].inset_axes([0.5, 0.1, 0.3, 0.3], xlim=(x1**2/(2*m_fs[i]) * 511000, x2**2/(2*m_fs[i]) * 511000), ylim=(y1, y2), xticklabels=[],
-            #                           yticklabels=[])
+            # inset = axs[0].inset_axes([0.5, 0.1, 0.3, 0.3], xlim=(x1**2/(2*m_fs[i]) * 511000, x2**2/(2*m_fs[i]) * 511000),
+            # ylim=(y1, y2), xticklabels=[], yticklabels=[])
             # inset.plot(xs**2/(2*m_fs[i]) * 511000, ys, linewidth=1.1, drawstyle='steps-mid')
             # inset.plot(xs**2/(2*m_fs[i]) * 511000, fit, linewidth=0.9, color='r')
             # axs[0].indicate_inset_zoom(inset, edgecolor='k', linewidth=1.2)
 
             titles = ['Neutron', '3H', '11C', '13N', '15O', '17F', '19Ne']
             axs[0].set_title(
-                f"iminuit Fit to Low Statistics (1e5) {titles[i]} Decay\nSM a: {abvs[i]:0.5f}, Fit a: {m.values['a']:0.5f}, δa: {m.errors['a']:.2}")
+                f"iminuit Fit to High Statistics (1e9) {titles[i]} Decay\nSM a: {abvs[i]:0.5f}, Fit a: {m.values['a']:0.5f}, δa: {m.errors['a']:.2}")
             axs[1].set_xlabel('Nuclear recoil energy [eV]')
-            axs[0].set_ylabel('Counts')
+            axs[0].set_ylabel('Counts (Normalized)')
             residuals = (ys - fit) / (np.sqrt(ys) + 1)
             axs[1].plot(xs ** 2 / (2 * m_fs[i]) * 511000, residuals, drawstyle='steps-mid')
             axs[1].axhline(0, color='r', linewidth=0.9)
