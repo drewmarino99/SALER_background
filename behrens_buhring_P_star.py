@@ -9,6 +9,7 @@ from uncertainties import unumpy
 from uncertainties.umath import *
 from matplotlib import gridspec
 from matplotlib.ticker import FuncFormatter
+import pandas as pd
 
 
 # Function from page 169 of Behrens & Buhring 1982 (Electron radial wave functions and nuclear beta decay)
@@ -152,7 +153,7 @@ def moving_average(x, w):
     return np.convolve(x, np.ones(w), 'valid') / w
 
 
-def monte_carlo(Delta, Z_daught, m_f, qs, lil_a, lil_b, points):
+def monte_carlo(Delta, Z_daught, m_f, qs, lil_a, lil_b, points, returnBins=True):
     bincount = len(qs)
     pdf = dGamma_dEf(Delta, Z_daught, m_f, qs, lil_a, lil_b)
     pdf_x = qs
@@ -167,6 +168,8 @@ def monte_carlo(Delta, Z_daught, m_f, qs, lil_a, lil_b, points):
     # plt.show()
     y_samples = np.random.uniform(0, 1, points)
     x_samples = np.interp(y_samples, cdf, pdf_x)
+    if not returnBins:
+        return x_samples
     counts, bins = np.histogram(x_samples, bins=bincount, density=True)
     return bins[1:] - (bins[1] / 2 - bins[0] / 2), counts
 
@@ -314,17 +317,81 @@ if __name__ == '__main__':
     q_maxes = [np.sqrt(delta ** 2 - 1) for delta in deltas]
     qs = np.asarray([np.linspace(0, qmax, 100000) for qmax in q_maxes])
 
+    recalibrate = True
+    blur = True
+
+    # Section to test effect of varying calibration
+    # Load BeEST P2-Chew2 laser data
+    if recalibrate or blur:
+        df = pd.read_feather('./phase_3_chew2_laserdata.feather')
+
+        # Peak centroids and errors
+        centroids = df['ch0_centroids'].to_numpy()
+        centroid_errs = df['ch0_centroiderrors'].to_numpy()
+
+        # Peak gaussian sigma and uncertaintys
+        sigmas = df['ch0_sigmas'].to_numpy()
+        sigma_errs = df['ch0_sigmaerrors'].to_numpy()
+
+        # Generate new "fit" laser positions by sampling around centroids
+        new_centroids = np.random.normal(centroids, centroid_errs)
+        new_sigmas = np.random.normal(sigmas, sigma_errs)
+
+
+        # Recalibrate with degree 3 polynomial
+        lowest_photon_number = new_centroids[0] // 3.5
+        lowest_photon_number = lowest_photon_number if np.abs(3.5 * lowest_photon_number - new_centroids[0]) < (
+            np.abs(3.5 * (lowest_photon_number + 1) - new_centroids[0])) else lowest_photon_number + 1
+        photon_energies = [(i + lowest_photon_number) * 3.5 for i in range(len(new_centroids))]
+        calibration = np.poly1d(np.polyfit(new_centroids, photon_energies, 2))
+
+        # Generate blur as function of e
+        blurring = np.poly1d(np.polyfit(new_centroids, new_sigmas, 1))
+        # print('Blur:', blurring)
+
     # Run each one until sensitivity to dr/r better than 0.1%
     for i in range(len(rhos)):
         sensitivity = 1000
-        num_points = int(1e9)
-        # Still no Z correction: note * 0
+        num_points = int(1e8)
+        # Still no Z correction: note '* 0' below
         real_max = np.amax(dGamma_dEf(deltas[i], charges[i], m_fs[i], qs[i], abvs[i], lil_b))
         while sensitivity > 0.1 / 100 and num_points < 1e11:
-            xs, ys = monte_carlo(deltas[i], charges[i] * 0, m_fs[i], qs[i], abvs[i], lil_b, num_points)
+            if recalibrate or blur:
+                # samples in momentum space
+                samps_0 = monte_carlo(deltas[i], charges[i] * 0, m_fs[i], qs[i], abvs[i], lil_b, num_points, returnBins=False)
+                # samples in energy space, where calibration is
+                samps = samps_0 ** 2 / (2 * m_fs[i]) * 511000
+                # print(np.amin(samps), np.argmin(samps))
+                # print(samps, 'E space')
+                if blur:
+                    # print(np.amin(blurring(samps)), np.argmin(blurring(samps)), samps[np.argmin(blurring(samps))])
+                    samps = np.random.normal(samps, blurring(samps))
+                    # print(samps, 'Blurred')
+                if recalibrate:
+                    # apply calibration
+                    samps = calibration(samps)
+                    # print(samps, 'Calibrated')
+                # return to momentum space where everything else is
+                # print(len(samps[samps <= 0]), 'Less than or equal to zero')
+                samps[samps <= 0] = samps_0[:len(samps[samps <= 0])] ** 2 / (2 * m_fs[i]) * 511000
+                del samps_0
+                # print('Energy space max/min:', np.amax(samps), np.amin(samps))
+                samps = np.sqrt((2 * m_fs[i])/511000 * samps)
+                # print('Momentum space max/min:', np.amax(samps), np.amin(samps))
+                counts, bins = np.histogram(samps, bins=len(qs[i]), density=True)
+                xs, ys = bins[1:] - (bins[1] / 2 - bins[0] / 2), counts
+                del samps, counts, bins
+            else:
+                xs, ys = monte_carlo(deltas[i], charges[i] * 0, m_fs[i], qs[i], abvs[i], lil_b, num_points)
             ys_err = np.sqrt(ys)
             ys_err[ys_err == 0] = 1
             scale_guess = np.amax(ys) / real_max
+
+            # blur/calibration can appear as greater than possible momentum
+            # this fixes that because otherwise the fit breaks
+            xs = xs[xs <= np.amax(qs[i])]
+            ys = ys[:len(xs)]
+            ys_err = ys_err[:len(xs)]
             # # With b
             # least_squares = LeastSquares(xs, ys, ys_err,
             #                              lambda x, a, b, scale: scale * dGamma_dEf(deltas[i], charges[i],
@@ -385,7 +452,7 @@ if __name__ == '__main__':
 
             titles = ['Neutron', '3H', '11C', '13N', '15O', '17F', '19Ne']
             axs[0].set_title(
-                f"iminuit Fit to High Statistics (1e9) {titles[i]} Decay\nSM a: {abvs[i]:0.5f}, Fit a: {m.values['a']:0.5f}, δa: {m.errors['a']:.2}")
+                f"iminuit Fit to 1e8 {titles[i]} Decay\nSM a: {abvs[i]:0.5f}, Fit a: {m.values['a']:0.5f}, δa: {m.errors['a']:.2}")
             axs[1].set_xlabel('Nuclear recoil energy [eV]')
             axs[0].set_ylabel('Counts (Normalized)')
             residuals = (ys - fit) / (np.sqrt(ys) + 1)
@@ -399,7 +466,7 @@ if __name__ == '__main__':
             print(np.amax(np.abs(residuals)))
             axs[1].set_ylim([-(np.abs(residuals)).max() - 0.2, (np.abs(residuals)).max() + 0.2])
             plt.tight_layout()
-            plt.show()
+            # plt.show()
             break
 
     # Check sensitivity to V_ud from 10^8 decays
@@ -431,12 +498,7 @@ if __name__ == '__main__':
     V_uds = unumpy.sqrt(K / (Gf ** 2 * g_v ** 2 * (delta_vr + 1) * ft_mirror_errors * (1 + fa_fv_errors * rhos ** 2)))
     print(list(zip(V_uds_rho_only, ['n', '3H', '11C', '13N', '15O', '17F', '19Ne'])))
     print(list(zip(V_uds, ['n', '3H', '11C', '13N', '15O', '17F', '19Ne'])))
+    plt.show()
     # print(V_uds_rho_only, '\n\n')
     # print(V_uds)
 
-# Can now write this in a report format:
-# Start with theory from JTW, transform into recoil energy spectrum, show different shapes for different values of lil_a
-# Show Monte Carlo sampling, how I fit to lil_a
-# plots for sensitivity to lil_a (as fn of value of lil_a), bring up table with da/a vs dr/r,
-# Current values for Ftmirror, delta, etc, and finish with sensitivity to V_ud w&w/o all uncertainties
-# ~7-10 pages with plots.  Can then work towards systematics instead of statistics

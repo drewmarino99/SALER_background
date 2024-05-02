@@ -118,3 +118,4 @@ plt.show()
 # Take BeEST laser centroids and scatter each in a gaussian centered at measured value with width uncertainty on centroid
 # Use this to apply to recoil data and fit to little a, this will give you the remaining uncertainty on the calibration applied to little a
 # constant noise, fano noise, inhomogeneity noise
+
