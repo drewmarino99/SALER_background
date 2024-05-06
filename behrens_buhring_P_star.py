@@ -146,7 +146,7 @@ def dGamma_dEf(delta, Z, mf, pf, a, b):
             pf ** 2 * i_mnl(E_0, 1, 0, -1, e_bounds) - i_mnl(E_0, 1, 0, 1, e_bounds) - i_mnl(E_0, 1, 2, -1,
                                                                                              e_bounds)))
     )
-    return res/(np.sum(res) * (pf[1]-pf[0]))  # normalize
+    return res / (np.sum(res) * (pf[1] - pf[0]))  # normalize
 
 
 def moving_average(x, w):
@@ -315,7 +315,7 @@ if __name__ == '__main__':
     m_is = [m_fs[i] + deltas[i] for i in range(len(m_fs))]
     lil_b = 0
     q_maxes = [np.sqrt(delta ** 2 - 1) for delta in deltas]
-    qs = np.asarray([np.linspace(0, qmax, 100000) for qmax in q_maxes])
+    qs = np.asarray([np.linspace(0, qmax, 10000) for qmax in q_maxes])
 
     recalibrate = True
     blur = True
@@ -329,14 +329,13 @@ if __name__ == '__main__':
         centroids = df['ch0_centroids'].to_numpy()
         centroid_errs = df['ch0_centroiderrors'].to_numpy()
 
-        # Peak gaussian sigma and uncertaintys
+        # Peak gaussian sigma and uncertainties
         sigmas = df['ch0_sigmas'].to_numpy()
         sigma_errs = df['ch0_sigmaerrors'].to_numpy()
 
         # Generate new "fit" laser positions by sampling around centroids
         new_centroids = np.random.normal(centroids, centroid_errs)
         new_sigmas = np.random.normal(sigmas, sigma_errs)
-
 
         # Recalibrate with degree 3 polynomial
         lowest_photon_number = new_centroids[0] // 3.5
@@ -352,13 +351,14 @@ if __name__ == '__main__':
     # Run each one until sensitivity to dr/r better than 0.1%
     for i in range(len(rhos)):
         sensitivity = 1000
-        num_points = int(1e8)
+        num_points = int(1e9)
         # Still no Z correction: note '* 0' below
         real_max = np.amax(dGamma_dEf(deltas[i], charges[i], m_fs[i], qs[i], abvs[i], lil_b))
         while sensitivity > 0.1 / 100 and num_points < 1e11:
             if recalibrate or blur:
                 # samples in momentum space
-                samps_0 = monte_carlo(deltas[i], charges[i] * 0, m_fs[i], qs[i], abvs[i], lil_b, num_points, returnBins=False)
+                samps_0 = monte_carlo(deltas[i], charges[i] * 0, m_fs[i], qs[i], abvs[i], lil_b, num_points,
+                                      returnBins=False)
                 # samples in energy space, where calibration is
                 samps = samps_0 ** 2 / (2 * m_fs[i]) * 511000
                 # print(np.amin(samps), np.argmin(samps))
@@ -376,7 +376,7 @@ if __name__ == '__main__':
                 samps[samps <= 0] = samps_0[:len(samps[samps <= 0])] ** 2 / (2 * m_fs[i]) * 511000
                 del samps_0
                 # print('Energy space max/min:', np.amax(samps), np.amin(samps))
-                samps = np.sqrt((2 * m_fs[i])/511000 * samps)
+                samps = np.sqrt((2 * m_fs[i]) / 511000 * samps)
                 # print('Momentum space max/min:', np.amax(samps), np.amin(samps))
                 counts, bins = np.histogram(samps, bins=len(qs[i]), density=True)
                 xs, ys = bins[1:] - (bins[1] / 2 - bins[0] / 2), counts
@@ -389,20 +389,26 @@ if __name__ == '__main__':
 
             # blur/calibration can appear as greater than possible momentum
             # this fixes that because otherwise the fit breaks
-            xs = xs[xs <= np.amax(qs[i])]
-            ys = ys[:len(xs)]
-            ys_err = ys_err[:len(xs)]
-            # # With b
-            # least_squares = LeastSquares(xs, ys, ys_err,
-            #                              lambda x, a, b, scale: scale * dGamma_dEf(deltas[i], charges[i],
-            #                                                                        m_fs[i], x, a, b))
-            # m = Minuit(least_squares, a=0, scale=scale_guess, b=0)
+            # xs = xs[xs <= np.amax(qs[i])]
+            # ys = ys[:len(xs)]
+            # ys_err = ys_err[:len(xs)]
 
-            # Without b
+            cut = len(xs) // 20
+            xs = xs[cut:-cut//4]
+            ys = ys[cut:-cut//4]
+            ys_err = ys_err[cut:-cut//4]
+
+            # With b
             least_squares = LeastSquares(xs, ys, ys_err,
-                                         lambda x, a, scale: scale * dGamma_dEf(deltas[i], charges[i] * 0,
-                                                                                m_fs[i], x, a, 0))
-            m = Minuit(least_squares, a=0, scale=scale_guess)
+                                         lambda x, a, b, scale: scale * dGamma_dEf(deltas[i], charges[i],
+                                                                                   m_fs[i], x, a, b))
+            m = Minuit(least_squares, a=0, scale=scale_guess, b=0)
+
+            # # Without b
+            # least_squares = LeastSquares(xs, ys, ys_err,
+            #                              lambda x, a, scale: scale * dGamma_dEf(deltas[i], charges[i] * 0,
+            #                                                                     m_fs[i], x, a, 0))
+            # m = Minuit(least_squares, a=0, scale=scale_guess)
 
             # # Only b
             # least_squares = LeastSquares(xs, ys, ys_err,
@@ -416,18 +422,17 @@ if __name__ == '__main__':
             # Output results
             print(list(['n', '3H', '11C', '13N', '15O', '17F', '19Ne'])[i])
 
-            # Without b
-            error = m.errors['a']
-            sensitivity = np.abs((error / abvs[i]) / sensitivityRatios[i])
-            print(f'Points: {num_points:,},', f'Delta rho / rho: {sensitivity:.5f},', f'Real a: {abvs[i]:.5f},',
-                  f"Fit a:{m.values['a']:.5f} +/- {m.errors['a']:0.1e}, scale: {m.values['scale']:.5f}")
-
-            # # With b
+            # # Without b
             # error = m.errors['a']
             # sensitivity = np.abs((error / abvs[i]) / sensitivityRatios[i])
             # print(f'Points: {num_points:,},', f'Delta rho / rho: {sensitivity:.5f},', f'Real a: {abvs[i]:.5f},',
-            # f"Fit a:{m.values['a']:.5f} +/- {m.errors['a']:0.1e}, Fit b:{m.values['b']:.5f} +/- {m.errors['b']:0.1e},
-            # scale: {m.values['scale']:.3f}")
+            #       f"Fit a:{m.values['a']:.5f} +/- {m.errors['a']:0.1e}, scale: {m.values['scale']:.5f}")
+
+            # With b
+            error = m.errors['a']
+            sensitivity = np.abs((error / abvs[i]) / sensitivityRatios[i])
+            print(f'Points: {num_points:,},', f'Delta rho / rho: {sensitivity:.5f},', f'Real a: {abvs[i]:.5f},',
+                  f"Fit a:{m.values['a']:.5f} +/- {m.errors['a']:0.1e}, Fit b:{m.values['b']:.5f} +/- {m.errors['b']:0.1e}, scale: {m.values['scale']:.3f}")
 
             # # Only b
             # print(f"Points: {num_points:,}, Fit b:{m.values['b']:.5f} +/- {m.errors['b']:0.1e}")
@@ -452,7 +457,7 @@ if __name__ == '__main__':
 
             titles = ['Neutron', '3H', '11C', '13N', '15O', '17F', '19Ne']
             axs[0].set_title(
-                f"iminuit Fit to 1e8 {titles[i]} Decay\nSM a: {abvs[i]:0.5f}, Fit a: {m.values['a']:0.5f}, δa: {m.errors['a']:.2}")
+                f"iminuit Fit to 1e9 {titles[i]} Decay\nSM a: {abvs[i]:0.5f}, Fit a: {m.values['a']:0.5f}, δa: {m.errors['a']:.2}")
             axs[1].set_xlabel('Nuclear recoil energy [eV]')
             axs[0].set_ylabel('Counts (Normalized)')
             residuals = (ys - fit) / (np.sqrt(ys) + 1)
@@ -501,4 +506,3 @@ if __name__ == '__main__':
     plt.show()
     # print(V_uds_rho_only, '\n\n')
     # print(V_uds)
-
